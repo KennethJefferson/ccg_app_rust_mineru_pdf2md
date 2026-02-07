@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-07
+
+### Added
+- Headless mode (`--no-tui`) for background/automated execution
+- Upload workers CLI argument (`-u, --upload-workers`) for future SRP worker split
+- Server-side cleanup: temp dir removal, `gc.collect()`, `torch.cuda.empty_cache()` after each PDF
+- MFR performance research notes in `__research/mfr_performance.md`
+
+### Changed
+- Logs now always write to `__logs/` directory (was output dir or cwd)
+- Output always written next to source PDF (removed `-o`/`--output` flag)
+- Timeouts are no longer retryable (fail immediately, move to next PDF)
+- Server pinned to `transformers==4.49.0` (fixes UniMERNet `cache_position` crash)
+
+### Removed
+- `-o, --output` CLI flag (flat output directory mode)
+- Collision-safe filename resolution (no longer needed without flat output)
+- 2 unit tests for removed output directory features (5 tests remain)
+
 ## [0.1.0] - 2026-02-07
 
 ### Added

@@ -18,9 +18,26 @@ pdf2md [OPTIONS] --input <INPUT>... --server <SERVER>
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `-r, --recursive` | `false` | Scan subdirectories recursively |
-| `-o, --output <DIR>` | next to source | Flat output directory for all markdown files |
-| `-w, --workers <N>` | `1` | Number of parallel workers (1-3) |
+| `-u, --upload-workers <N>` | `1` | Number of upload workers (1-3) |
+| `-w, --workers <N>` | `1` | Number of processing workers (1-3) |
+| `--no-tui` | `false` | Run without TUI (headless mode, log only) |
 | `-h, --help` | | Print help |
+
+### Output Behavior
+
+Markdown files are always written next to the source PDF. For example:
+```
+./my_pdfs/book.pdf  ->  ./my_pdfs/book.md
+```
+
+### Timeout Behavior
+
+Each PDF has a 600-second (10 minute) timeout. If a PDF exceeds this:
+- The conversion fails immediately (no retry)
+- The worker moves to the next PDF in the queue
+- The failure is logged to `__logs/`
+
+Only transient network errors trigger retries (3 attempts with exponential backoff).
 
 ## Examples
 
@@ -31,8 +48,6 @@ Convert all PDFs in a single directory:
 pdf2md -i ./documents -s http://your-server:40161
 ```
 
-Output `.md` files are placed next to each source PDF.
-
 ### Recursive Scan
 
 Scan all subdirectories:
@@ -40,21 +55,20 @@ Scan all subdirectories:
 pdf2md -i ./documents -r -s http://your-server:40161
 ```
 
-### Flat Output Directory
+### Multiple Input Directories
 
-Collect all markdown files into one directory:
 ```bash
-pdf2md -i ./dir1 -i ./dir2 -o ./all_markdown -s http://your-server:40161
+pdf2md -i ./dir1 -i ./dir2 -s http://your-server:40161
 ```
 
-Files with duplicate names are automatically resolved (`report.md`, `report_1.md`, `report_2.md`).
+### Headless Mode
 
-### Multiple Workers
-
-Process up to 3 PDFs simultaneously:
+Run without the TUI (for background/automated execution):
 ```bash
-pdf2md -i ./documents -w 3 -s http://your-server:40161
+pdf2md -i ./documents -s http://your-server:40161 --no-tui
 ```
+
+Logs go to `__logs/` and stderr.
 
 ### Resume / Skip Existing
 
@@ -73,26 +87,32 @@ pdf2md -i ./documents -s http://server:40161
 The interactive terminal UI displays:
 
 ```
-┌ MinerU PDF to Markdown ──────────────────────────┐
-│  Workers                                          │
-│    ⠹ Worker 0: document.md  (5s)                 │
-│    - Worker 1: idle                               │
-│                                                   │
-│  Progress                                         │
-│  ████████████░░░░░░░░  3/10          30%          │
-│                                                   │
-│  Files                                            │
-│    ⠹ document.md                                  │
-│    ✓ report.md  12.3s                             │
-│    ✗ broken.pdf  Server error  2.1s               │
-│    - pending.md                                   │
-│                                                   │
-│  Completed: 2  Failed: 1  Skipped: 0  Elapsed: 45s│
-└ [Ctrl+C to stop] ────────────────────────────────┘
++-- MinerU PDF to Markdown -----------------------------------------+
+|  Workers                                                          |
+|    . Worker 0: document.md  (5s)                                  |
+|    - Worker 1: idle                                               |
+|                                                                   |
+|  Progress                                                         |
+|  ============--------  3/10          30%                          |
+|                                                                   |
+|  Files                                                            |
+|    . document.md                                                  |
+|    v report.md  12.3s                                             |
+|    x broken.pdf  Server error  2.1s                               |
+|    - pending.md                                                   |
+|                                                                   |
+|  Completed: 2  Failed: 1  Skipped: 0  Elapsed: 45s               |
++-- [Ctrl+C to stop] ----------------------------------------------+
 ```
 
 - Press **Ctrl+C** once for graceful shutdown (finishes current PDFs)
 - Press **Ctrl+C** again to force quit immediately
+
+## Logging
+
+All logs are written to the `__logs/` directory relative to the working directory. Log files use daily rotation (`pdf2md.log.YYYY-MM-DD`).
+
+In TUI mode, logs go to file only. In headless mode (`--no-tui`), logs go to both file and stderr.
 
 ## Server Setup (RunPod GPU)
 
@@ -117,11 +137,14 @@ source /workspace/mineru-venv/bin/activate
 pip install --upgrade pip
 pip install 'magic-pdf[full]' uvicorn fastapi python-multipart modelscope pycocotools
 
-# 4. Clone the API server
+# 4. Pin transformers to compatible version (newer versions break UniMERNet MFR)
+pip install 'transformers==4.49.0'
+
+# 5. Clone the API server
 cd /workspace
 git clone https://github.com/neka-nat/mineru-api.git
 
-# 5. Download ML models
+# 6. Download ML models
 python3.10 -c "
 from modelscope import snapshot_download
 snapshot_download('opendatalab/PDF-Extract-Kit-1.0',
@@ -130,7 +153,7 @@ snapshot_download('ppaanngggg/layoutreader',
     local_dir='/workspace/layoutreader')
 "
 
-# 6. Download v3 OCR detection models (required by magic-pdf v1.3.12)
+# 7. Download v3 OCR detection models (required by magic-pdf v1.3.12)
 python3.10 -c "
 from huggingface_hub import snapshot_download
 snapshot_download('opendatalab/PDF-Extract-Kit-1.0',
@@ -144,7 +167,7 @@ cp /workspace/PDF-Extract-Kit-v3-ocr/models/OCR/paddleocr_torch/ch_PP-OCRv3_det_
 cp /workspace/PDF-Extract-Kit-v3-ocr/models/OCR/paddleocr_torch/en_PP-OCRv3_det_infer.pth \
    /workspace/PDF-Extract-Kit/models/OCR/paddleocr_torch/
 
-# 7. Configure GPU mode
+# 8. Configure GPU mode
 cat > ~/magic-pdf.json << 'EOF'
 {
     "bucket_info": {},
@@ -163,12 +186,12 @@ cat > ~/magic-pdf.json << 'EOF'
 }
 EOF
 
-# 8. Start the server
+# 9. Start the server
 screen -dmS mineru bash -c 'source /workspace/mineru-venv/bin/activate && \
     cd /workspace/mineru-api && \
     uvicorn app.main:app --host 0.0.0.0 --port 8000 > /workspace/mineru-server.log 2>&1'
 
-# 9. Verify
+# 10. Verify
 curl http://localhost:8000/health
 # -> {"status": "ok"}
 ```
@@ -192,9 +215,11 @@ screen -r mineru
 
 ### Known Issues
 
+- **transformers version**: Must be pinned to `4.49.0`. Newer versions (e.g., 4.57.6) pass a `cache_position` kwarg that UniMERNet's `UnimerMBartForCausalLM.forward()` does not accept, causing 500 errors during the MFR (Math Formula Recognition) step.
 - **OCR model mismatch**: The model repo (`opendatalab/PDF-Extract-Kit-1.0`) updated OCR models from v3 to v5, but `magic-pdf v1.3.12` expects v3 detection models. The v3 models must be downloaded from an older commit (`a4f6a8d29a4d`).
 - **pycocotools**: Required even when using `doclayout_yolo` layout model due to import leakage from `layoutlmv3` code paths.
 - **`unimernet_small`**: Maps to `MFR/unimernet_hf_small_2503` directory in v1.3.12 (not the older `MFR/unimernet_small`).
+- **Math-heavy PDFs**: Large math-heavy documents (e.g., 684-page calculus books) can exceed the 600s timeout due to MFR processing thousands of formula images. See `__research/mfr_performance.md` for optimization options.
 
 ## API Reference
 

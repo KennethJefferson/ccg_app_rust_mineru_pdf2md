@@ -13,15 +13,19 @@ pub struct Cli {
     #[arg(short, long, default_value_t = false)]
     pub recursive: bool,
 
-    /// Flat output directory (default: next to source PDF)
-    #[arg(short, long)]
-    pub output: Option<PathBuf>,
+/// Number of upload workers (1-3)
+    #[arg(short = 'u', long = "upload-workers", default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=3))]
+    pub upload_workers: u8,
 
-    /// Number of parallel workers (1-3)
+    /// Number of processing workers (1-3)
     #[arg(short = 'w', long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=3))]
     pub workers: u8,
 
     /// MinerU API server URL (e.g., http://213.192.2.89:40161)
     #[arg(short = 's', long)]
     pub server: String,
+
+    /// Run without TUI (headless mode, log only)
+    #[arg(long, default_value_t = false)]
+    pub no_tui: bool,
 }

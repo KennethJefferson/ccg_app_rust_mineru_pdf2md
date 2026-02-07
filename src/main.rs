@@ -22,36 +22,27 @@ async fn main() -> anyhow::Result<()> {
     let app_start = Instant::now();
     let cli = Cli::parse();
 
-    let log_dir = cli
-        .output
-        .clone()
-        .unwrap_or_else(|| PathBuf::from("."));
+    let log_dir = PathBuf::from("__logs");
+    std::fs::create_dir_all(&log_dir)?;
 
-    logging::init_logging(&log_dir, true);
+    logging::init_logging(&log_dir, !cli.no_tui);
 
     info!(
         inputs = ?cli.input,
         recursive = cli.recursive,
-        output = ?cli.output,
+        upload_workers = cli.upload_workers,
         workers = cli.workers,
         server = %cli.server,
         "Starting PDF2Markdown (MinerU)"
     );
 
+    let num_upload_workers = cli.upload_workers as usize;
     let num_workers = cli.workers as usize;
-
-    if let Some(ref out_dir) = cli.output {
-        if !out_dir.exists() {
-            std::fs::create_dir_all(out_dir)?;
-            info!(path = %out_dir.display(), "Created output directory");
-        }
-    }
 
     let scan_start = Instant::now();
     let scan_result = scanner::scan_directories(
         &cli.input,
         cli.recursive,
-        cli.output.as_deref(),
     )?;
     let scan_elapsed = scan_start.elapsed();
 
@@ -68,9 +59,11 @@ async fn main() -> anyhow::Result<()> {
         scan_result.files,
         scan_result.total_found,
         scan_result.skipped,
+        num_upload_workers,
         num_workers,
         &cli.server,
         app_start,
+        cli.no_tui,
     )
     .await?;
 

@@ -119,5 +119,5 @@ impl ApiClient {
 }
 
 fn is_retryable(error: &ApiError) -> bool {
-    matches!(error, ApiError::Timeout(_) | ApiError::Request(_))
+    matches!(error, ApiError::Request(_))
 }

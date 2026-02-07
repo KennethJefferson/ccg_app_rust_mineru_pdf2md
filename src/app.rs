@@ -16,10 +16,13 @@ pub async fn run(
     files: Vec<FileEntry>,
     total: usize,
     skipped: usize,
+    num_upload_workers: usize,
     num_workers: usize,
     server_url: &str,
     app_start: Instant,
+    headless: bool,
 ) -> anyhow::Result<()> {
+    let _ = num_upload_workers; // TODO: wire up upload worker pool
     if queue.is_empty() {
         info!("No PDFs to process.");
         println!("No PDFs to process. All files already converted or none found.");
@@ -81,86 +84,111 @@ pub async fn run(
         }
     });
 
-    let mut terminal = tui::init_terminal()?;
-    let default_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        tui::restore_terminal();
-        default_hook(info);
-    }));
-
-    let (app_tx, mut app_rx) = mpsc::unbounded_channel::<AppEvent>();
-
-    tui::event::spawn_crossterm_reader(app_tx.clone());
-
-    let fwd_tx = app_tx.clone();
-    tokio::spawn(async move {
-        while let Some(evt) = event_rx.recv().await {
-            if fwd_tx.send(AppEvent::Worker(evt)).is_err() {
-                break;
-            }
-        }
-    });
-
-    let mut tick: usize = 0;
     let mut workers_finished = 0;
     let mut first_processing_logged = false;
 
-    loop {
-        terminal.draw(|frame| {
-            ui::render(frame, &state, tick);
-        })?;
-
-        let deadline = tokio::time::sleep(Duration::from_millis(66));
-        tokio::pin!(deadline);
-
-        tokio::select! {
-            Some(event) = app_rx.recv() => {
-                match event {
-                    AppEvent::Key(key) => {
-                        if key.code == KeyCode::Char('c')
-                            && key.modifiers.contains(KeyModifiers::CONTROL)
-                        {
-                            // Ctrl+C handling is done by shutdown controller
-                        }
-                    }
-                    AppEvent::Tick => {
-                        tick += 1;
-                    }
-                    AppEvent::Worker(worker_event) => {
-                        if !first_processing_logged {
-                            if matches!(worker_event, WorkerEvent::Started { .. }) {
-                                let startup_ms = app_start.elapsed().as_millis();
-                                info!(startup_to_first_processing_ms = startup_ms as u64, "First PDF started processing");
-                                first_processing_logged = true;
-                            }
-                        }
-                        handle_worker_event(&mut state, worker_event, &mut workers_finished);
-                    }
+    if headless {
+        // Headless mode: just consume worker events and log
+        while let Some(worker_event) = event_rx.recv().await {
+            if !first_processing_logged {
+                if matches!(worker_event, WorkerEvent::Started { .. }) {
+                    let startup_ms = app_start.elapsed().as_millis();
+                    info!(startup_to_first_processing_ms = startup_ms as u64, "First PDF started processing");
+                    first_processing_logged = true;
                 }
             }
-            _ = &mut deadline => {
-                tick += 1;
+            handle_worker_event(&mut state, worker_event, &mut workers_finished);
+
+            if shutdown.is_force() {
+                break;
+            }
+            if workers_finished >= num_workers {
+                break;
+            }
+            if shutdown.is_graceful() {
+                state.shutdown_requested = true;
             }
         }
+    } else {
+        let mut terminal = tui::init_terminal()?;
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            tui::restore_terminal();
+            default_hook(info);
+        }));
 
-        if shutdown.is_force() {
-            break;
-        }
+        let (app_tx, mut app_rx) = mpsc::unbounded_channel::<AppEvent>();
 
-        if workers_finished >= num_workers {
+        tui::event::spawn_crossterm_reader(app_tx.clone());
+
+        let fwd_tx = app_tx.clone();
+        tokio::spawn(async move {
+            while let Some(evt) = event_rx.recv().await {
+                if fwd_tx.send(AppEvent::Worker(evt)).is_err() {
+                    break;
+                }
+            }
+        });
+
+        let mut tick: usize = 0;
+
+        loop {
             terminal.draw(|frame| {
                 ui::render(frame, &state, tick);
             })?;
-            tokio::time::sleep(Duration::from_millis(500)).await;
-            break;
+
+            let deadline = tokio::time::sleep(Duration::from_millis(66));
+            tokio::pin!(deadline);
+
+            tokio::select! {
+                Some(event) = app_rx.recv() => {
+                    match event {
+                        AppEvent::Key(key) => {
+                            if key.code == KeyCode::Char('c')
+                                && key.modifiers.contains(KeyModifiers::CONTROL)
+                            {
+                                // Ctrl+C handling is done by shutdown controller
+                            }
+                        }
+                        AppEvent::Tick => {
+                            tick += 1;
+                        }
+                        AppEvent::Worker(worker_event) => {
+                            if !first_processing_logged {
+                                if matches!(worker_event, WorkerEvent::Started { .. }) {
+                                    let startup_ms = app_start.elapsed().as_millis();
+                                    info!(startup_to_first_processing_ms = startup_ms as u64, "First PDF started processing");
+                                    first_processing_logged = true;
+                                }
+                            }
+                            handle_worker_event(&mut state, worker_event, &mut workers_finished);
+                        }
+                    }
+                }
+                _ = &mut deadline => {
+                    tick += 1;
+                }
+            }
+
+            if shutdown.is_force() {
+                break;
+            }
+
+            if workers_finished >= num_workers {
+                terminal.draw(|frame| {
+                    ui::render(frame, &state, tick);
+                })?;
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                break;
+            }
+
+            if shutdown.is_graceful() {
+                state.shutdown_requested = true;
+            }
         }
 
-        if shutdown.is_graceful() {
-            state.shutdown_requested = true;
-        }
+        tui::restore_terminal();
     }
-
-    tui::restore_terminal();
 
     let stats = &state.stats;
     let elapsed = stats.elapsed();
