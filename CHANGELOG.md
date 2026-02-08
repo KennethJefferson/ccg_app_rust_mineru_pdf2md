@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-08
+
+### Added
+- Dynamic per-PDF timeout based on page count: `clamp(pages * 1.5s, 60s, --timeout)`
+- `--timeout` / `-t` CLI argument to set timeout ceiling (default 600s, range 60-7200s)
+- PDF page count reading via `lopdf` crate during scan phase
+- Page count display in TUI as `(XXp)` suffix on filenames
+- Per-file logging of page count and computed timeout during scan
+- Worker logs now include page count and timeout per PDF
+- 2 new unit tests for `calculate_timeout` (7 total)
+
+### Changed
+- Timeout is now per-request (on POST builder) instead of client-level
+- Removed hardcoded `REQUEST_TIMEOUT` constant from API client
+- `scan_directories` now accepts `max_timeout_secs` parameter
+- `QueueItem` carries `page_count` and `timeout` per PDF
+- `FileEntry` carries `page_count` for TUI display
+- `api_client::convert()` and `try_convert()` accept `timeout: Duration` parameter
+
+### Fixed
+- Server: added surrogate character sanitization in `pdf.py` to prevent `UnicodeEncodeError` on PDFs with invalid Unicode from OCR
+
 ## [0.2.0] - 2026-02-07
 
 ### Added

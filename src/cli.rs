@@ -25,6 +25,10 @@ pub struct Cli {
     #[arg(short = 's', long)]
     pub server: String,
 
+    /// Per-PDF timeout ceiling in seconds (60-7200)
+    #[arg(short = 't', long, default_value_t = 600, value_parser = clap::value_parser!(u64).range(60..=7200))]
+    pub timeout: u64,
+
     /// Run without TUI (headless mode, log only)
     #[arg(long, default_value_t = false)]
     pub no_tui: bool,

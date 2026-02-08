@@ -106,7 +106,7 @@ fn render_files(frame: &mut Frame, area: Rect, state: &AppState) {
     let visible: Vec<_> = sorted_files
         .iter()
         .take(MAX_FILES_VISIBLE)
-        .map(|f| widgets::file_line(&f.filename, &f.status))
+        .map(|f| widgets::file_line(&f.filename, &f.status, f.page_count))
         .collect();
 
     let mut lines = vec![Line::from(Span::styled(

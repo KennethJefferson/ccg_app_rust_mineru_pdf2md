@@ -48,21 +48,27 @@ pub fn worker_line(id: usize, status: &WorkerStatus, frame: usize) -> Line<'stat
     }
 }
 
-pub fn file_line(filename: &str, status: &FileStatus) -> Line<'static> {
+pub fn file_line(filename: &str, status: &FileStatus, page_count: Option<u32>) -> Line<'static> {
+    let pages_suffix = match page_count {
+        Some(p) => format!(" ({p}p)"),
+        None => String::new(),
+    };
+    let display_name = format!("{filename}{pages_suffix}");
+
     match status {
         FileStatus::Pending => Line::from(vec![
             Span::styled("  - ", Style::default().fg(DIM)),
-            Span::styled(filename.to_string(), Style::default().fg(DIM)),
+            Span::styled(display_name, Style::default().fg(DIM)),
         ]),
         FileStatus::Processing => Line::from(vec![
             Span::styled("  ⠹ ", Style::default().fg(GREEN)),
-            Span::styled(filename.to_string(), Style::default().fg(Color::White)),
+            Span::styled(display_name, Style::default().fg(Color::White)),
         ]),
         FileStatus::Completed { duration } => {
             let secs = duration.as_secs_f32();
             Line::from(vec![
                 Span::styled("  ✓ ", Style::default().fg(GREEN)),
-                Span::styled(filename.to_string(), Style::default().fg(GREEN)),
+                Span::styled(display_name, Style::default().fg(GREEN)),
                 Span::styled(format!("  {secs:.1}s"), Style::default().fg(DIM)),
             ])
         }
@@ -70,14 +76,14 @@ pub fn file_line(filename: &str, status: &FileStatus) -> Line<'static> {
             let secs = duration.as_secs_f32();
             Line::from(vec![
                 Span::styled("  ✗ ", Style::default().fg(RED)),
-                Span::styled(filename.to_string(), Style::default().fg(RED)),
+                Span::styled(display_name, Style::default().fg(RED)),
                 Span::styled(format!("  {error}"), Style::default().fg(YELLOW)),
                 Span::styled(format!("  {secs:.1}s"), Style::default().fg(DIM)),
             ])
         }
         FileStatus::Skipped => Line::from(vec![
             Span::styled("  - ", Style::default().fg(DIM)),
-            Span::styled(filename.to_string(), Style::default().fg(DIM)),
+            Span::styled(display_name, Style::default().fg(DIM)),
             Span::styled("  skipped", Style::default().fg(YELLOW)),
         ]),
     }

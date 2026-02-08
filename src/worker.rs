@@ -58,6 +58,13 @@ pub async fn run_worker(
         }
 
         let filename = item.filename.clone();
+        info!(
+            worker = worker_id,
+            file = %filename,
+            pages = ?item.page_count,
+            timeout_secs = item.timeout.as_secs(),
+            "Processing"
+        );
         let _ = event_tx.send(WorkerEvent::Started {
             worker_id,
             filename: filename.clone(),
@@ -65,7 +72,7 @@ pub async fn run_worker(
 
         let started = Instant::now();
 
-        match api_client.convert(&item.source_path).await {
+        match api_client.convert(&item.source_path, item.timeout).await {
             Ok(resp) => {
                 let elapsed = started.elapsed();
                 if !resp.content.is_empty() {

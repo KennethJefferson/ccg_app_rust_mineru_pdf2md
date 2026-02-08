@@ -7,6 +7,8 @@ pub struct QueueItem {
     pub source_path: PathBuf,
     pub output_path: PathBuf,
     pub filename: String,
+    pub page_count: Option<u32>,
+    pub timeout: Duration,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -34,6 +36,7 @@ pub enum FileStatus {
 pub struct FileEntry {
     pub filename: String,
     pub status: FileStatus,
+    pub page_count: Option<u32>,
 }
 
 #[derive(Debug)]

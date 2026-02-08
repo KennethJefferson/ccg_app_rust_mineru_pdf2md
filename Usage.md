@@ -20,6 +20,7 @@ pdf2md [OPTIONS] --input <INPUT>... --server <SERVER>
 | `-r, --recursive` | `false` | Scan subdirectories recursively |
 | `-u, --upload-workers <N>` | `1` | Number of upload workers (1-3) |
 | `-w, --workers <N>` | `1` | Number of processing workers (1-3) |
+| `-t, --timeout <SECS>` | `600` | Per-PDF timeout ceiling in seconds (60-7200) |
 | `--no-tui` | `false` | Run without TUI (headless mode, log only) |
 | `-h, --help` | | Print help |
 
@@ -32,7 +33,20 @@ Markdown files are always written next to the source PDF. For example:
 
 ### Timeout Behavior
 
-Each PDF has a 600-second (10 minute) timeout. If a PDF exceeds this:
+Each PDF gets a **dynamic timeout based on its page count**:
+
+```
+timeout = clamp(pages * 1.5s, floor=60s, ceiling=--timeout)
+```
+
+- Page counts are read during the scan phase using `lopdf` (lightweight PDF catalog parser)
+- Small PDFs (< 40 pages) get the 60s floor to cover model loading + upload overhead
+- Large PDFs get proportionally more time (e.g., 1000 pages = 1500s)
+- The `--timeout` flag sets the hard ceiling (default: 600s, max: 7200s)
+- If page count extraction fails (corrupt/encrypted PDF), the full `--timeout` value is used
+- Use `--timeout 3600` for batches containing large (700+ page) or math-heavy books
+
+If a PDF exceeds its computed timeout:
 - The conversion fails immediately (no retry)
 - The worker moves to the next PDF in the queue
 - The failure is logged to `__logs/`
@@ -60,6 +74,15 @@ pdf2md -i ./documents -r -s http://your-server:40161
 ```bash
 pdf2md -i ./dir1 -i ./dir2 -s http://your-server:40161
 ```
+
+### Large PDF Batch with Extended Timeout
+
+For batches with large or math-heavy books:
+```bash
+pdf2md -i ./documents -s http://your-server:40161 --timeout 3600
+```
+
+A 5000-page manual gets the full 3600s (1h) ceiling. A 100-page book gets 150s. The scanner logs each file's page count and computed timeout.
 
 ### Headless Mode
 
@@ -219,7 +242,8 @@ screen -r mineru
 - **OCR model mismatch**: The model repo (`opendatalab/PDF-Extract-Kit-1.0`) updated OCR models from v3 to v5, but `magic-pdf v1.3.12` expects v3 detection models. The v3 models must be downloaded from an older commit (`a4f6a8d29a4d`).
 - **pycocotools**: Required even when using `doclayout_yolo` layout model due to import leakage from `layoutlmv3` code paths.
 - **`unimernet_small`**: Maps to `MFR/unimernet_hf_small_2503` directory in v1.3.12 (not the older `MFR/unimernet_small`).
-- **Math-heavy PDFs**: Large math-heavy documents (e.g., 684-page calculus books) can exceed the 600s timeout due to MFR processing thousands of formula images. See `__research/mfr_performance.md` for optimization options.
+- **Math-heavy PDFs**: Math-heavy documents process at >1.5s/page due to MFR (formula recognition). Use `--timeout 3600` or higher for these. See `__research/mfr_performance.md` for details.
+- **Surrogate characters**: Some PDFs produce markdown with invalid Unicode surrogates from OCR. The server sanitizes these before responding (applied in `pdf.py`).
 
 ## API Reference
 

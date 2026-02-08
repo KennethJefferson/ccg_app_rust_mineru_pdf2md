@@ -8,7 +8,6 @@ use tracing::{debug, warn};
 use crate::error::ApiError;
 use crate::types::ApiResponse;
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(600);
 const MAX_RETRIES: u32 = 3;
 
 pub struct ApiClient {
@@ -19,7 +18,6 @@ pub struct ApiClient {
 impl ApiClient {
     pub fn new(base_url: &str) -> Result<Self, ApiError> {
         let client = Client::builder()
-            .timeout(REQUEST_TIMEOUT)
             .build()
             .map_err(ApiError::Request)?;
 
@@ -27,7 +25,7 @@ impl ApiClient {
         Ok(Self { client, base_url })
     }
 
-    pub async fn convert(&self, pdf_path: &Path) -> Result<ApiResponse, ApiError> {
+    pub async fn convert(&self, pdf_path: &Path, timeout: Duration) -> Result<ApiResponse, ApiError> {
         let pdf_bytes = tokio::fs::read(pdf_path)
             .await
             .map_err(|e| ApiError::Server(format!("Failed to read PDF: {e}")))?;
@@ -46,7 +44,7 @@ impl ApiClient {
                 tokio::time::sleep(backoff).await;
             }
 
-            match self.try_convert(&pdf_bytes, &filename).await {
+            match self.try_convert(&pdf_bytes, &filename, timeout).await {
                 Ok(resp) => return Ok(resp),
                 Err(e) => {
                     if !is_retryable(&e) {
@@ -65,6 +63,7 @@ impl ApiClient {
         &self,
         pdf_bytes: &[u8],
         filename: &str,
+        timeout: Duration,
     ) -> Result<ApiResponse, ApiError> {
         let md5_hash = format!("{:x}", Md5::digest(pdf_bytes));
 
@@ -81,11 +80,12 @@ impl ApiClient {
             .post(&url)
             .header("X-File-MD5", &md5_hash)
             .multipart(form)
+            .timeout(timeout)
             .send()
             .await
             .map_err(|e| {
                 if e.is_timeout() {
-                    ApiError::Timeout(REQUEST_TIMEOUT.as_secs())
+                    ApiError::Timeout(timeout.as_secs())
                 } else {
                     ApiError::Request(e)
                 }

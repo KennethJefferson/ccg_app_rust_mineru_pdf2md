@@ -9,7 +9,8 @@ A Rust-based CLI tool for batch converting PDF documents to Markdown using [Mine
 - Headless mode (`--no-tui`) for background/automated execution
 - Separate upload and processing worker configuration
 - Automatic skip of previously converted files (resume support)
-- Non-retryable timeouts (fail fast, move to next PDF)
+- Dynamic per-PDF timeouts based on page count (via `lopdf`)
+- Page count displayed in TUI next to filenames
 - Exponential backoff retry for transient network errors
 - Graceful two-stage shutdown (Ctrl+C once to finish current, twice to force)
 - All logs written to `__logs/` directory with daily rotation
@@ -31,6 +32,9 @@ pdf2md -i ./my_pdfs -s http://your-server:port
 
 # Recursive scan
 pdf2md -i ./my_pdfs -r -s http://your-server:port
+
+# Increase timeout ceiling for large/math-heavy PDFs
+pdf2md -i ./my_pdfs -s http://your-server:port --timeout 3600
 
 # Headless mode (for background/automated runs)
 pdf2md -i ./my_pdfs -s http://your-server:port --no-tui
@@ -78,7 +82,7 @@ __research/         Research findings and notes
 cargo test
 ```
 
-Runs 5 unit tests covering scanner functionality: directory validation, PDF filtering, skip logic, and recursive scanning.
+Runs 7 unit tests covering scanner functionality: directory validation, PDF filtering, skip logic, recursive scanning, and timeout calculation.
 
 ## License
 

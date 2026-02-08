@@ -15,6 +15,8 @@ Rust CLI tool (`pdf2md`) that batch-converts PDF files to Markdown using a remot
 - Dual-mode operation: interactive TUI or headless (`--no-tui`)
 - Exponential backoff retry (3 attempts) for transient network errors only
 - Timeouts are non-retryable (fail immediately, move to next PDF)
+- Dynamic per-PDF timeout based on page count: `clamp(pages * 1.5s, 60s, --timeout)`
+- PDF page count read via `lopdf` during scan phase
 - Output always written next to source PDF
 - All logs written to `__logs/` directory
 
@@ -22,11 +24,12 @@ Rust CLI tool (`pdf2md`) that batch-converts PDF files to Markdown using a remot
 - `POST /api/parse` - multipart form, field `file`, response `{"content": "markdown"}`
 - `GET /health` - response `{"status": "ok"}`
 - `X-File-MD5` header sent for integrity verification
-- 600s request timeout per PDF
+- Per-request timeout (dynamic, based on page count)
+- `--timeout` CLI arg sets the ceiling (default 600s, range 60-7200s)
 
 ## Build & Test
 ```
-cargo test          # 5 scanner unit tests
+cargo test          # 7 scanner unit tests (5 scan + 2 timeout calculation)
 cargo build --release
 ```
 
@@ -38,7 +41,7 @@ src/
   types.rs         - AppState, QueueItem, FileEntry, Stats, ApiResponse
   app.rs           - Main event loop, TUI/headless, worker coordination
   worker.rs        - Worker task: pull PDF, call API, write .md
-  scanner.rs       - Directory scanning, PDF discovery
+  scanner.rs       - Directory scanning, PDF discovery, page count, timeout calc
   api_client.rs    - HTTP client for MinerU API
   error.rs         - ScanError, ApiError enums
   shutdown.rs      - Two-stage Ctrl+C handling

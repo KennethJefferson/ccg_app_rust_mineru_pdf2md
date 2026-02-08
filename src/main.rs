@@ -33,6 +33,7 @@ async fn main() -> anyhow::Result<()> {
         upload_workers = cli.upload_workers,
         workers = cli.workers,
         server = %cli.server,
+        timeout = cli.timeout,
         "Starting PDF2Markdown (MinerU)"
     );
 
@@ -43,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
     let scan_result = scanner::scan_directories(
         &cli.input,
         cli.recursive,
+        cli.timeout,
     )?;
     let scan_elapsed = scan_start.elapsed();
 
