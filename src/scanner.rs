@@ -30,7 +30,7 @@ pub fn calculate_timeout(page_count: Option<u32>, max_timeout_secs: u64) -> Dura
     let floor = Duration::from_secs(60);
     match page_count {
         Some(pages) => {
-            let computed = Duration::from_secs_f64(pages as f64 * 1.5);
+            let computed = Duration::from_secs_f64(pages as f64 * 3.0);
             computed.max(floor).min(max)
         }
         None => max,
@@ -203,14 +203,14 @@ mod tests {
 
     #[test]
     fn test_calculate_timeout_with_pages() {
-        // 100 pages * 1.5 = 150s
-        assert_eq!(calculate_timeout(Some(100), 600), Duration::from_secs(150));
-        // 10 pages * 1.5 = 15s, but floor is 60s
+        // 100 pages * 3.0 = 300s
+        assert_eq!(calculate_timeout(Some(100), 600), Duration::from_secs(300));
+        // 10 pages * 3.0 = 30s, but floor is 60s
         assert_eq!(calculate_timeout(Some(10), 600), Duration::from_secs(60));
-        // 1000 pages * 1.5 = 1500s, but capped at 600
+        // 1000 pages * 3.0 = 3000s, but capped at 600
         assert_eq!(calculate_timeout(Some(1000), 600), Duration::from_secs(600));
-        // 1000 pages * 1.5 = 1500s, capped at 3600
-        assert_eq!(calculate_timeout(Some(1000), 3600), Duration::from_secs(1500));
+        // 1000 pages * 3.0 = 3000s, capped at 3600
+        assert_eq!(calculate_timeout(Some(1000), 3600), Duration::from_secs(3000));
     }
 
     #[test]

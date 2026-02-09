@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-02-08
 
 ### Added
-- Dynamic per-PDF timeout based on page count: `clamp(pages * 1.5s, 60s, --timeout)`
+- Dynamic per-PDF timeout based on page count: `clamp(pages * 3.0s, 60s, --timeout)`
 - `--timeout` / `-t` CLI argument to set timeout ceiling (default 600s, range 60-7200s)
 - PDF page count reading via `lopdf` crate during scan phase
 - Page count display in TUI as `(XXp)` suffix on filenames

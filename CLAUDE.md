@@ -15,7 +15,7 @@ Rust CLI tool (`pdf2md`) that batch-converts PDF files to Markdown using a remot
 - Dual-mode operation: interactive TUI or headless (`--no-tui`)
 - Exponential backoff retry (3 attempts) for transient network errors only
 - Timeouts are non-retryable (fail immediately, move to next PDF)
-- Dynamic per-PDF timeout based on page count: `clamp(pages * 1.5s, 60s, --timeout)`
+- Dynamic per-PDF timeout based on page count: `clamp(pages * 3.0s, 60s, --timeout)`
 - PDF page count read via `lopdf` during scan phase
 - Output always written next to source PDF
 - All logs written to `__logs/` directory

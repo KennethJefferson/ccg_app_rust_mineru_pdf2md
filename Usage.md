@@ -36,12 +36,13 @@ Markdown files are always written next to the source PDF. For example:
 Each PDF gets a **dynamic timeout based on its page count**:
 
 ```
-timeout = clamp(pages * 1.5s, floor=60s, ceiling=--timeout)
+timeout = clamp(pages * 3.0s, floor=60s, ceiling=--timeout)
 ```
 
 - Page counts are read during the scan phase using `lopdf` (lightweight PDF catalog parser)
-- Small PDFs (< 40 pages) get the 60s floor to cover model loading + upload overhead
-- Large PDFs get proportionally more time (e.g., 1000 pages = 1500s)
+- Small PDFs (< 20 pages) get the 60s floor to cover model loading + upload overhead
+- Large PDFs get proportionally more time (e.g., 1000 pages = 3000s)
+- The 3.0s/page multiplier covers math-heavy content (observed range: 0.5-2.9 s/page)
 - The `--timeout` flag sets the hard ceiling (default: 600s, max: 7200s)
 - If page count extraction fails (corrupt/encrypted PDF), the full `--timeout` value is used
 - Use `--timeout 3600` for batches containing large (700+ page) or math-heavy books
